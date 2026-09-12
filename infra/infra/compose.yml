@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: campuslab-rabbitmq
+    ports:
+      - "5672:5672"    # Puerto de comunicación AMQP
+      - "15672:15672"  # Consola de administración Web
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      

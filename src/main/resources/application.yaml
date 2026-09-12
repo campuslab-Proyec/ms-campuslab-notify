@@ -1,0 +1,17 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: ms-campuslab-notify
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+
+campuslab:
+  rabbitmq:
+    queue: notification.queue
+    exchange: notification.exchange
+    routingkey: notification.routingkey
