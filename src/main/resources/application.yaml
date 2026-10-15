@@ -9,9 +9,22 @@ spring:
     port: 5672
     username: guest
     password: guest
+    listener:
+      simple:
+        # Guía 3: un mensaje a la vez (fair dispatch)
+        prefetch: 1
+        # Si se agotan los reintentos, el mensaje NO vuelve a la cola: va al DLX -> DLQ
+        default-requeue-rejected: false
+        # Guía 3: reintentos con backoff exponencial (1s, 2s, 4s)
+        retry:
+          enabled: true
+          initial-interval: 1s
+          multiplier: 2.0
+          max-interval: 10s
+          max-attempts: 3
 
 campuslab:
   rabbitmq:
-    # Deben coincidir con lo declarado en RabbitMQConfig (cmd.direct -> q.cmd.email)
-    exchange: cmd.direct
-    routingkey: email.send
+    queue: notification.queue
+    exchange: notification.exchange
+    routingkey: notification.routingkey
