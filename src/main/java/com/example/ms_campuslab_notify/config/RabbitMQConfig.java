@@ -20,6 +20,11 @@ public class RabbitMQConfig {
     public static final String QUEUE_PREP_DLQ = "q.cmd.prep.dlq";
     public static final String QUEUE_VOUCHER_DLQ = "q.cmd.voucher.dlq";
 
+    // Cola de eventos de reservas: la declara también ms-campuslab-bookings con los mismos argumentos
+    public static final String QUEUE_BOOKING = "notify.booking.queue";
+    public static final String QUEUE_BOOKING_DLQ = "notify.booking.dlq";
+    public static final String ROUTING_KEY_BOOKING = "booking.status.changed";
+
     @Bean
     public MessageConverter jsonMessageConverter() {
         return new Jackson2JsonMessageConverter();
@@ -105,5 +110,29 @@ public class RabbitMQConfig {
     @Bean
     public Binding voucherDlqBinding() {
         return BindingBuilder.bind(voucherDlqQueue()).to(deadLetterExchange()).with(QUEUE_VOUCHER_DLQ);
+    }
+
+    // --- COLA EVENTOS DE RESERVAS Y SU DLQ ---
+    @Bean
+    public Queue bookingQueue() {
+        return QueueBuilder.durable(QUEUE_BOOKING)
+                .withArgument("x-dead-letter-exchange", DLX_EXCHANGE)
+                .withArgument("x-dead-letter-routing-key", QUEUE_BOOKING_DLQ)
+                .build();
+    }
+
+    @Bean
+    public Queue bookingDlqQueue() {
+        return QueueBuilder.durable(QUEUE_BOOKING_DLQ).build();
+    }
+
+    @Bean
+    public Binding bookingBinding() {
+        return BindingBuilder.bind(bookingQueue()).to(directExchange()).with(ROUTING_KEY_BOOKING);
+    }
+
+    @Bean
+    public Binding bookingDlqBinding() {
+        return BindingBuilder.bind(bookingDlqQueue()).to(deadLetterExchange()).with(QUEUE_BOOKING_DLQ);
     }
 }

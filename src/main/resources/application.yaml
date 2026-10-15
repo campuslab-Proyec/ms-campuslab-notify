@@ -12,6 +12,6 @@ spring:
 
 campuslab:
   rabbitmq:
-    queue: notification.queue
-    exchange: notification.exchange
-    routingkey: notification.routingkey
+    # Deben coincidir con lo declarado en RabbitMQConfig (cmd.direct -> q.cmd.email)
+    exchange: cmd.direct
+    routingkey: email.send

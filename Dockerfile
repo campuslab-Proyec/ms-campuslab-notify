@@ -15,5 +15,5 @@ RUN addgroup -S spring && adduser -S spring -G spring
 COPY --from=build /app/target/*.jar app.jar
 USER spring
 # catalog: 8082 | notify: 8083 | report: 8084
-EXPOSE 8082
+EXPOSE 8083
 ENTRYPOINT ["java", "-jar", "app.jar"]

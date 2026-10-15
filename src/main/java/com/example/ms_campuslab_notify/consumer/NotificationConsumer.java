@@ -1,9 +1,12 @@
 package com.example.ms_campuslab_notify.consumer;
 
+import java.util.Map;
+
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 
 import com.example.ms_campuslab_notify.config.RabbitMQConfig;
+import com.example.ms_campuslab_notify.dto.NotificationMessageDTO;
 import com.example.ms_campuslab_notify.dto.NotificationRequest;
 
 import lombok.extern.slf4j.Slf4j;
@@ -32,5 +35,14 @@ public class NotificationConsumer {
         log.info("🎟️ [VOUCHER EMITIDO]");
         log.info("Comprobante para: {}", notification.getRecipient());
         log.info("Detalles: {}", notification.getMessage());
+    }
+
+    @RabbitListener(queues = RabbitMQConfig.QUEUE_BOOKING)
+    public void receiveBookingStatusChanged(NotificationMessageDTO event) {
+        Map<String, Object> payload = event.getPayload() != null ? event.getPayload() : Map.of();
+        log.info("📅 [RESERVA ACTUALIZADA]");
+        log.info("Reserva: {} | Recurso: {} | Estudiante: {}",
+                payload.get("bookingId"), payload.get("resourceId"), payload.get("studentId"));
+        log.info("Nuevo estado: {} (eventId={})", payload.get("status"), event.getEventId());
     }
 }
