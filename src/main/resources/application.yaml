@@ -15,7 +15,8 @@ spring:
         prefetch: 1
         # Si se agotan los reintentos, el mensaje NO vuelve a la cola: va al DLX -> DLQ
         default-requeue-rejected: false
-        # Guía 3: reintentos con backoff exponencial (1s, 2s, 4s)
+        # Guía 3: reintentos con backoff exponencial (1s, 2s, 4s).
+        # Aplica a los consumidores de demo; los de dominio usan ACK manual (ver RabbitMQConfig)
         retry:
           enabled: true
           initial-interval: 1s
@@ -23,8 +24,28 @@ spring:
           max-interval: 10s
           max-attempts: 3
 
+# Nombres de exchanges, colas, DLQ y routing keys centralizados en un solo lugar.
+# Se leen con MessagingProperties (RabbitMQConfig, consumidores y productores los usan desde aquí).
 campuslab:
   rabbitmq:
-    # Deben coincidir con lo declarado en RabbitMQConfig (cmd.direct -> q.cmd.email)
-    exchange: cmd.direct
-    routingkey: email.send
+    exchanges:
+      command: cmd.direct
+      dead-letter: cmd.dead.dlx
+    queues:
+      email:
+        name: q.cmd.email
+        routing-key: email.send
+        dlq: q.cmd.email.dlq
+      prep:
+        name: q.cmd.prep
+        routing-key: prep.ticket
+        dlq: q.cmd.prep.dlq
+      voucher:
+        name: q.cmd.voucher
+        routing-key: voucher.gen
+        dlq: q.cmd.voucher.dlq
+      # La declara también ms-campuslab-bookings con los mismos argumentos
+      booking:
+        name: notify.booking.queue
+        routing-key: booking.status.changed
+        dlq: notify.booking.dlq

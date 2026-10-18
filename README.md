@@ -48,3 +48,37 @@ Ejecutar la aplicación:
 Bash
 mvn spring-boot:run
 El microservicio estará disponible por defecto en: http://localhost:8082
+## 📨 Mensajería (RabbitMQ)
+
+- **Nombres centralizados:** exchanges, colas, DLQ y routing keys están en `application.yaml` (`campuslab.rabbitmq.*`) y se leen con `MessagingProperties`.
+- **Topología:** `config/RabbitMQConfig` declara, por cada caso de uso (email, prep, voucher, booking), su `Queue`, su DLQ y sus `Binding` hacia `cmd.direct` / `cmd.dead.dlx`.
+- **Consumidores por dominio** (`consumer/`): `EmailConsumer`, `PreparationConsumer`, `VoucherConsumer`, `BookingEventConsumer`.
+- **ACK manual:** cada consumidor confirma con `basicAck`. Si los datos son inválidos hace `basicNack` sin reencolar (va a la DLQ); ante un error inesperado reencola una vez y, si vuelve a fallar, lo manda a la DLQ.
+
+## 🛠️ API de administración de RabbitMQ
+
+La lógica está en `service/RabbitAdminService`; `controller/RabbitAdminController` solo expone HTTP.
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/api/admin/queues` | Estado de las colas que declara la aplicación |
+| `GET` | `/api/admin/queues/{name}` | Mensajes y consumidores de una cola |
+| `POST` | `/api/admin/queues` | Crea una cola (`name`, `durable`, `autoDelete`, `deadLetterExchange`, `deadLetterRoutingKey`, `messageTtl`, `maxLength`) |
+| `DELETE` | `/api/admin/queues/{name}?ifUnused=&ifEmpty=` | Elimina una cola |
+| `DELETE` | `/api/admin/queues/{name}/messages` | Vacía una cola |
+| `POST` | `/api/admin/exchanges` | Crea un exchange (`name`, `type`: direct, topic, fanout o headers) |
+| `DELETE` | `/api/admin/exchanges/{name}` | Elimina un exchange |
+| `POST` | `/api/admin/bindings` | Enlaza una cola a un exchange (`queue`, `exchange`, `routingKey`) |
+| `DELETE` | `/api/admin/bindings` | Elimina un binding (mismo body) |
+
+**Validaciones:** nombres obligatorios, de máximo 255 caracteres, solo `A-Z a-z 0-9 . _ : -` y sin el prefijo reservado `amq.`; tipo de exchange válido; `messageTtl` y `maxLength` positivos; `deadLetterRoutingKey` exige `deadLetterExchange` y ese exchange debe existir.
+
+**Respuestas:** `201` creado, `204` eliminado, `400` parámetros inválidos, `404` cola o exchange inexistente, `409` ya existe, está en uso o la declara la aplicación (las colas y exchanges propios están protegidos), `503` sin conexión con RabbitMQ.
+
+Ejemplo:
+
+```bash
+curl -X POST http://localhost:8083/api/admin/queues \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"demo.admin.queue","messageTtl":60000,"deadLetterExchange":"cmd.dead.dlx"}'
+```

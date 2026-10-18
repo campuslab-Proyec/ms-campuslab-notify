@@ -1,138 +1,163 @@
 package com.example.ms_campuslab_notify.config;
 
 import org.springframework.amqp.core.*;
-import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
+import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.example.ms_campuslab_notify.config.MessagingProperties.QueueDefinition;
+
+/**
+ * Topología de RabbitMQ del dominio: exchange de comandos, DLX y, por cada caso de uso,
+ * su cola, su DLQ y los bindings. Los nombres vienen de application.yaml (MessagingProperties).
+ */
 @Configuration
+@EnableConfigurationProperties(MessagingProperties.class)
 public class RabbitMQConfig {
 
-    public static final String DIRECT_EXCHANGE = "cmd.direct";
-    public static final String DLX_EXCHANGE = "cmd.dead.dlx";
+    /** Factory de los consumidores de dominio: ACK manual, sin reintentos automáticos. */
+    public static final String MANUAL_ACK_FACTORY = "manualAckContainerFactory";
 
-    public static final String QUEUE_EMAIL = "q.cmd.email";
-    public static final String QUEUE_PREP = "q.cmd.prep";
-    public static final String QUEUE_VOUCHER = "q.cmd.voucher";
+    private final MessagingProperties props;
 
-    public static final String QUEUE_EMAIL_DLQ = "q.cmd.email.dlq";
-    public static final String QUEUE_PREP_DLQ = "q.cmd.prep.dlq";
-    public static final String QUEUE_VOUCHER_DLQ = "q.cmd.voucher.dlq";
-
-    // Cola de eventos de reservas: la declara también ms-campuslab-bookings con los mismos argumentos
-    public static final String QUEUE_BOOKING = "notify.booking.queue";
-    public static final String QUEUE_BOOKING_DLQ = "notify.booking.dlq";
-    public static final String ROUTING_KEY_BOOKING = "booking.status.changed";
-
-    @Bean
-    public MessageConverter jsonMessageConverter() {
-        return new Jackson2JsonMessageConverter();
+    public RabbitMQConfig(MessagingProperties props) {
+        this.props = props;
     }
 
     @Bean
+    public MessageConverter jsonMessageConverter() {
+        return new JacksonJsonMessageConverter();
+    }
+
+    /**
+     * Los consumidores de dominio confirman cada mensaje con basicAck / basicNack.
+     * Sin advice de reintentos: el propio consumidor decide si reencolar o mandar a la DLQ.
+     * Los mensajes que no se pueden convertir (JSON inválido) se rechazan sin reencolar -> DLQ.
+     */
+    @Bean(name = MANUAL_ACK_FACTORY)
+    public SimpleRabbitListenerContainerFactory manualAckContainerFactory(ConnectionFactory connectionFactory,
+                                                                          MessageConverter jsonMessageConverter) {
+        SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
+        factory.setConnectionFactory(connectionFactory);
+        factory.setMessageConverter(jsonMessageConverter);
+        factory.setAcknowledgeMode(AcknowledgeMode.MANUAL);
+        factory.setPrefetchCount(1);
+        factory.setDefaultRequeueRejected(false);
+        return factory;
+    }
+
+    // --- EXCHANGES ---
+    @Bean
     public DirectExchange directExchange() {
-        return new DirectExchange(DIRECT_EXCHANGE);
+        return new DirectExchange(props.getExchanges().getCommand());
     }
 
     @Bean
     public DirectExchange deadLetterExchange() {
-        return new DirectExchange(DLX_EXCHANGE);
+        return new DirectExchange(props.getExchanges().getDeadLetter());
     }
 
     // --- COLA EMAIL Y SU DLQ ---
     @Bean
     public Queue emailQueue() {
-        return QueueBuilder.durable(QUEUE_EMAIL)
-                .withArgument("x-dead-letter-exchange", DLX_EXCHANGE)
-                .withArgument("x-dead-letter-routing-key", QUEUE_EMAIL_DLQ)
-                .build();
+        return workQueue(props.getQueues().getEmail());
     }
 
     @Bean
     public Queue emailDlqQueue() {
-        return QueueBuilder.durable(QUEUE_EMAIL_DLQ).build();
+        return QueueBuilder.durable(props.getQueues().getEmail().getDlq()).build();
     }
 
     @Bean
     public Binding emailBinding() {
-        return BindingBuilder.bind(emailQueue()).to(directExchange()).with("email.send");
+        return BindingBuilder.bind(emailQueue()).to(directExchange())
+                .with(props.getQueues().getEmail().getRoutingKey());
     }
 
     @Bean
     public Binding emailDlqBinding() {
-        return BindingBuilder.bind(emailDlqQueue()).to(deadLetterExchange()).with(QUEUE_EMAIL_DLQ);
+        return BindingBuilder.bind(emailDlqQueue()).to(deadLetterExchange())
+                .with(props.getQueues().getEmail().getDlq());
     }
 
     // --- COLA PREPARACIÓN Y SU DLQ ---
     @Bean
     public Queue prepQueue() {
-        return QueueBuilder.durable(QUEUE_PREP)
-                .withArgument("x-dead-letter-exchange", DLX_EXCHANGE)
-                .withArgument("x-dead-letter-routing-key", QUEUE_PREP_DLQ)
-                .build();
+        return workQueue(props.getQueues().getPrep());
     }
 
     @Bean
     public Queue prepDlqQueue() {
-        return QueueBuilder.durable(QUEUE_PREP_DLQ).build();
+        return QueueBuilder.durable(props.getQueues().getPrep().getDlq()).build();
     }
 
     @Bean
     public Binding prepBinding() {
-        return BindingBuilder.bind(prepQueue()).to(directExchange()).with("prep.ticket");
+        return BindingBuilder.bind(prepQueue()).to(directExchange())
+                .with(props.getQueues().getPrep().getRoutingKey());
     }
 
     @Bean
     public Binding prepDlqBinding() {
-        return BindingBuilder.bind(prepDlqQueue()).to(deadLetterExchange()).with(QUEUE_PREP_DLQ);
+        return BindingBuilder.bind(prepDlqQueue()).to(deadLetterExchange())
+                .with(props.getQueues().getPrep().getDlq());
     }
 
     // --- COLA VOUCHER Y SU DLQ ---
     @Bean
     public Queue voucherQueue() {
-        return QueueBuilder.durable(QUEUE_VOUCHER)
-                .withArgument("x-dead-letter-exchange", DLX_EXCHANGE)
-                .withArgument("x-dead-letter-routing-key", QUEUE_VOUCHER_DLQ)
-                .build();
+        return workQueue(props.getQueues().getVoucher());
     }
 
     @Bean
     public Queue voucherDlqQueue() {
-        return QueueBuilder.durable(QUEUE_VOUCHER_DLQ).build();
+        return QueueBuilder.durable(props.getQueues().getVoucher().getDlq()).build();
     }
 
     @Bean
     public Binding voucherBinding() {
-        return BindingBuilder.bind(voucherQueue()).to(directExchange()).with("voucher.gen");
+        return BindingBuilder.bind(voucherQueue()).to(directExchange())
+                .with(props.getQueues().getVoucher().getRoutingKey());
     }
 
     @Bean
     public Binding voucherDlqBinding() {
-        return BindingBuilder.bind(voucherDlqQueue()).to(deadLetterExchange()).with(QUEUE_VOUCHER_DLQ);
+        return BindingBuilder.bind(voucherDlqQueue()).to(deadLetterExchange())
+                .with(props.getQueues().getVoucher().getDlq());
     }
 
     // --- COLA EVENTOS DE RESERVAS Y SU DLQ ---
     @Bean
     public Queue bookingQueue() {
-        return QueueBuilder.durable(QUEUE_BOOKING)
-                .withArgument("x-dead-letter-exchange", DLX_EXCHANGE)
-                .withArgument("x-dead-letter-routing-key", QUEUE_BOOKING_DLQ)
-                .build();
+        return workQueue(props.getQueues().getBooking());
     }
 
     @Bean
     public Queue bookingDlqQueue() {
-        return QueueBuilder.durable(QUEUE_BOOKING_DLQ).build();
+        return QueueBuilder.durable(props.getQueues().getBooking().getDlq()).build();
     }
 
     @Bean
     public Binding bookingBinding() {
-        return BindingBuilder.bind(bookingQueue()).to(directExchange()).with(ROUTING_KEY_BOOKING);
+        return BindingBuilder.bind(bookingQueue()).to(directExchange())
+                .with(props.getQueues().getBooking().getRoutingKey());
     }
 
     @Bean
     public Binding bookingDlqBinding() {
-        return BindingBuilder.bind(bookingDlqQueue()).to(deadLetterExchange()).with(QUEUE_BOOKING_DLQ);
+        return BindingBuilder.bind(bookingDlqQueue()).to(deadLetterExchange())
+                .with(props.getQueues().getBooking().getDlq());
+    }
+
+    /** Cola durable cuyos mensajes rechazados van al DLX con la DLQ como routing key. */
+    private Queue workQueue(QueueDefinition def) {
+        return QueueBuilder.durable(def.getName())
+                .withArgument("x-dead-letter-exchange", props.getExchanges().getDeadLetter())
+                .withArgument("x-dead-letter-routing-key", def.getDlq())
+                .build();
     }
 }
