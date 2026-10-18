@@ -28,6 +28,11 @@ spring:
 # Se leen con MessagingProperties (RabbitMQConfig, consumidores y productores los usan desde aquí).
 campuslab:
   rabbitmq:
+    # API HTTP de management (plugin rabbitmq_management): AmqpAdmin no permite listar colas ni exchanges
+    management:
+      url: http://localhost:15672
+      username: ${spring.rabbitmq.username}
+      password: ${spring.rabbitmq.password}
     exchanges:
       command: cmd.direct
       dead-letter: cmd.dead.dlx

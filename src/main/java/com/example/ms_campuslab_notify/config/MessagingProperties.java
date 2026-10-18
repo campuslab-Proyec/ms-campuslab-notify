@@ -14,6 +14,15 @@ public class MessagingProperties {
 
     private Exchanges exchanges = new Exchanges();
     private Queues queues = new Queues();
+    private Management management = new Management();
+
+    /** API HTTP de management de RabbitMQ, usada para listar colas, exchanges y bindings. */
+    @Data
+    public static class Management {
+        private String url;
+        private String username;
+        private String password;
+    }
 
     @Data
     public static class Exchanges {

@@ -61,15 +61,22 @@ La lógica está en `service/RabbitAdminService`; `controller/RabbitAdminControl
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `GET` | `/api/admin/queues` | Estado de las colas que declara la aplicación |
+| `GET` | `/api/admin/queues` | Todas las colas del broker con mensajes y consumidores (vía API de management) |
 | `GET` | `/api/admin/queues/{name}` | Mensajes y consumidores de una cola |
 | `POST` | `/api/admin/queues` | Crea una cola (`name`, `durable`, `autoDelete`, `deadLetterExchange`, `deadLetterRoutingKey`, `messageTtl`, `maxLength`) |
 | `DELETE` | `/api/admin/queues/{name}?ifUnused=&ifEmpty=` | Elimina una cola |
 | `DELETE` | `/api/admin/queues/{name}/messages` | Vacía una cola |
+| `GET` | `/api/admin/exchanges` | Lista los exchanges (sin el por defecto ni los `amq.*`) |
 | `POST` | `/api/admin/exchanges` | Crea un exchange (`name`, `type`: direct, topic, fanout o headers) |
 | `DELETE` | `/api/admin/exchanges/{name}` | Elimina un exchange |
+| `GET` | `/api/admin/bindings` | Lista los bindings exchange → cola |
 | `POST` | `/api/admin/bindings` | Enlaza una cola a un exchange (`queue`, `exchange`, `routingKey`) |
 | `DELETE` | `/api/admin/bindings` | Elimina un binding (mismo body) |
+| `POST` | `/api/admin/messages` | Publica un mensaje JSON de prueba (`exchange`, `routingKey`, `payload`) → 202 |
+
+Los listados usan la API HTTP de management de RabbitMQ (`campuslab.rabbitmq.management.url`, en Docker `http://rabbitmq-1:15672`), porque AmqpAdmin no permite listar. Si no responde, `GET /queues` devuelve al menos las colas propias y los demás listados responden 503.
+
+El frontend expone esta API en la página **Panel RabbitMQ** (solo Admin), a través del BFF en `/api/bff/admin/**`.
 
 **Validaciones:** nombres obligatorios, de máximo 255 caracteres, solo `A-Z a-z 0-9 . _ : -` y sin el prefijo reservado `amq.`; tipo de exchange válido; `messageTtl` y `maxLength` positivos; `deadLetterRoutingKey` exige `deadLetterExchange` y ese exchange debe existir.
 

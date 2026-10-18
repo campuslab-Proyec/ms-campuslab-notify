@@ -50,6 +50,11 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, e.getMessage(), null);
     }
 
+    @ExceptionHandler(ManagementUnavailableException.class)
+    public ResponseEntity<Map<String, Object>> handleManagementDown(ManagementUnavailableException e) {
+        return build(HttpStatus.SERVICE_UNAVAILABLE, e.getMessage(), null);
+    }
+
     @ExceptionHandler(AmqpConnectException.class)
     public ResponseEntity<Map<String, Object>> handleBrokerDown(AmqpConnectException e) {
         log.error("[ADMIN] No hay conexión con RabbitMQ", e);

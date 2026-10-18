@@ -2,7 +2,9 @@ package com.example.ms_campuslab_notify.service;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -17,13 +19,19 @@ import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.core.QueueInformation;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 
 import com.example.ms_campuslab_notify.dto.admin.AdminPatterns;
 import com.example.ms_campuslab_notify.dto.admin.BindingRequest;
+import com.example.ms_campuslab_notify.dto.admin.BindingSummary;
 import com.example.ms_campuslab_notify.dto.admin.CreateExchangeRequest;
 import com.example.ms_campuslab_notify.dto.admin.CreateQueueRequest;
+import com.example.ms_campuslab_notify.dto.admin.ExchangeSummary;
+import com.example.ms_campuslab_notify.dto.admin.PublishMessageRequest;
 import com.example.ms_campuslab_notify.dto.admin.QueueInfoResponse;
+import com.example.ms_campuslab_notify.dto.admin.QueueSummary;
 import com.example.ms_campuslab_notify.exception.InvalidRabbitConfigException;
+import com.example.ms_campuslab_notify.exception.ManagementUnavailableException;
 import com.example.ms_campuslab_notify.exception.ResourceConflictException;
 import com.example.ms_campuslab_notify.exception.ResourceNotFoundException;
 
@@ -43,25 +51,58 @@ public class RabbitAdminService {
 
     private final AmqpAdmin amqpAdmin;
     private final RabbitTemplate rabbitTemplate;
+    private final RabbitManagementClient managementClient;
     private final Set<String> managedQueues;
     private final Set<String> managedExchanges;
 
     public RabbitAdminService(AmqpAdmin amqpAdmin, RabbitTemplate rabbitTemplate,
+                              RabbitManagementClient managementClient,
                               List<Queue> declaredQueues, List<Exchange> declaredExchanges) {
         this.amqpAdmin = amqpAdmin;
         this.rabbitTemplate = rabbitTemplate;
+        this.managementClient = managementClient;
         this.managedQueues = declaredQueues.stream().map(Queue::getName).collect(Collectors.toUnmodifiableSet());
         this.managedExchanges = declaredExchanges.stream().map(Exchange::getName).collect(Collectors.toUnmodifiableSet());
     }
 
     // ================= COLAS =================
 
-    /** Estado de las colas que declara la aplicación. */
-    public List<QueueInfoResponse> listManagedQueues() {
-        return managedQueues.stream()
-                .sorted(Comparator.naturalOrder())
-                .map(this::toResponse)
-                .toList();
+    /**
+     * Todas las colas del broker, con sus contadores. Si la API de management no responde,
+     * se devuelven al menos las colas que declara la aplicación (consultadas por AMQP).
+     */
+    public List<QueueSummary> listQueues() {
+        try {
+            return managementClient.queues().stream()
+                    .map(q -> {
+                        Map<String, Object> args = asMap(q.get("arguments"));
+                        Object ttl = args.get("x-message-ttl");
+                        return new QueueSummary(
+                                str(q.get("name")),
+                                num(q.get("messages")),
+                                num(q.get("messages_ready")),
+                                num(q.get("messages_unacknowledged")),
+                                (int) num(q.get("consumers")),
+                                bool(q.get("durable")),
+                                bool(q.get("auto_delete")),
+                                args.get("x-dead-letter-exchange") == null ? null : str(args.get("x-dead-letter-exchange")),
+                                ttl == null ? null : num(ttl),
+                                managedQueues.contains(str(q.get("name"))));
+                    })
+                    .sorted(Comparator.comparing(QueueSummary::name))
+                    .toList();
+        } catch (RestClientException e) {
+            log.warn("[ADMIN] API de management no disponible, se listan solo las colas propias: {}", e.getMessage());
+            return managedQueues.stream()
+                    .sorted()
+                    .map(name -> {
+                        QueueInformation info = queueInfo(name);
+                        long messages = info == null ? 0 : info.getMessageCount();
+                        int consumers = info == null ? 0 : info.getConsumerCount();
+                        return new QueueSummary(name, messages, messages, 0, consumers, true, false, null, null, true);
+                    })
+                    .toList();
+        }
     }
 
     public QueueInfoResponse getQueue(String name) {
@@ -143,6 +184,20 @@ public class RabbitAdminService {
 
     // ================= EXCHANGES =================
 
+    /** Exchanges creados por la aplicación o por usuarios (sin el exchange por defecto ni los amq.*). */
+    public List<ExchangeSummary> listExchanges() {
+        return management(() -> managementClient.exchanges().stream()
+                .filter(e -> !str(e.get("name")).isEmpty() && !str(e.get("name")).startsWith(RESERVED_PREFIX))
+                .map(e -> new ExchangeSummary(
+                        str(e.get("name")),
+                        str(e.get("type")),
+                        bool(e.get("durable")),
+                        bool(e.get("auto_delete")),
+                        managedExchanges.contains(str(e.get("name")))))
+                .sorted(Comparator.comparing(ExchangeSummary::name))
+                .toList());
+    }
+
     public void createExchange(CreateExchangeRequest req) {
         validateName(req.name(), "el exchange");
         if (exchangeExists(req.name())) {
@@ -171,6 +226,15 @@ public class RabbitAdminService {
 
     // ================= BINDINGS =================
 
+    /** Bindings exchange -> cola (sin los implícitos del exchange por defecto). */
+    public List<BindingSummary> listBindings() {
+        return management(() -> managementClient.bindings().stream()
+                .filter(b -> !str(b.get("source")).isEmpty() && "queue".equals(b.get("destination_type")))
+                .map(b -> new BindingSummary(str(b.get("source")), str(b.get("destination")), str(b.get("routing_key"))))
+                .sorted(Comparator.comparing(BindingSummary::exchange).thenComparing(BindingSummary::queue))
+                .toList());
+    }
+
     public void createBinding(BindingRequest req) {
         Binding binding = toBinding(req);
         amqpAdmin.declareBinding(binding);
@@ -183,7 +247,46 @@ public class RabbitAdminService {
         log.info("[ADMIN] Binding eliminado: {} -> {} ({})", req.exchange(), req.queue(), binding.getRoutingKey());
     }
 
+    // ================= MENSAJES =================
+
+    /** Publica un mensaje JSON de prueba. Permite ver en vivo cómo llega a una cola o cae en la DLQ. */
+    public void publish(PublishMessageRequest req) {
+        validateName(req.exchange(), "el exchange");
+        if (!exchangeExists(req.exchange())) {
+            throw new ResourceNotFoundException("El exchange '" + req.exchange() + "' no existe");
+        }
+        String routingKey = req.routingKey() == null ? "" : req.routingKey();
+        rabbitTemplate.convertAndSend(req.exchange(), routingKey, req.payload());
+        log.info("[ADMIN] Mensaje publicado en {} ({})", req.exchange(), routingKey);
+    }
+
     // ================= APOYO =================
+
+    private <T> T management(Supplier<T> call) {
+        try {
+            return call.get();
+        } catch (RestClientException e) {
+            log.warn("[ADMIN] API de management no disponible: {}", e.getMessage());
+            throw new ManagementUnavailableException("La API de management de RabbitMQ no está disponible");
+        }
+    }
+
+    private static String str(Object value) {
+        return value == null ? "" : value.toString();
+    }
+
+    private static long num(Object value) {
+        return value instanceof Number n ? n.longValue() : 0L;
+    }
+
+    private static boolean bool(Object value) {
+        return Boolean.TRUE.equals(value);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> asMap(Object value) {
+        return value instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
+    }
 
     private Binding toBinding(BindingRequest req) {
         validateName(req.queue(), "la cola");

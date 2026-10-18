@@ -17,7 +17,11 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.ms_campuslab_notify.dto.admin.BindingRequest;
 import com.example.ms_campuslab_notify.dto.admin.CreateExchangeRequest;
 import com.example.ms_campuslab_notify.dto.admin.CreateQueueRequest;
+import com.example.ms_campuslab_notify.dto.admin.BindingSummary;
+import com.example.ms_campuslab_notify.dto.admin.ExchangeSummary;
+import com.example.ms_campuslab_notify.dto.admin.PublishMessageRequest;
 import com.example.ms_campuslab_notify.dto.admin.QueueInfoResponse;
+import com.example.ms_campuslab_notify.dto.admin.QueueSummary;
 import com.example.ms_campuslab_notify.service.RabbitAdminService;
 
 import jakarta.validation.Valid;
@@ -39,8 +43,8 @@ public class RabbitAdminController {
     // ================= COLAS =================
 
     @GetMapping("/queues")
-    public List<QueueInfoResponse> listQueues() {
-        return adminService.listManagedQueues();
+    public List<QueueSummary> listQueues() {
+        return adminService.listQueues();
     }
 
     @GetMapping("/queues/{name}")
@@ -68,6 +72,11 @@ public class RabbitAdminController {
 
     // ================= EXCHANGES =================
 
+    @GetMapping("/exchanges")
+    public List<ExchangeSummary> listExchanges() {
+        return adminService.listExchanges();
+    }
+
     @PostMapping("/exchanges")
     public ResponseEntity<Map<String, String>> createExchange(@Valid @RequestBody CreateExchangeRequest request) {
         adminService.createExchange(request);
@@ -83,6 +92,11 @@ public class RabbitAdminController {
 
     // ================= BINDINGS =================
 
+    @GetMapping("/bindings")
+    public List<BindingSummary> listBindings() {
+        return adminService.listBindings();
+    }
+
     @PostMapping("/bindings")
     public ResponseEntity<BindingRequest> createBinding(@Valid @RequestBody BindingRequest request) {
         adminService.createBinding(request);
@@ -93,5 +107,16 @@ public class RabbitAdminController {
     public ResponseEntity<Void> deleteBinding(@Valid @RequestBody BindingRequest request) {
         adminService.deleteBinding(request);
         return ResponseEntity.noContent().build();
+    }
+
+    // ================= MENSAJES =================
+
+    @PostMapping("/messages")
+    public ResponseEntity<Map<String, Object>> publish(@Valid @RequestBody PublishMessageRequest request) {
+        adminService.publish(request);
+        return ResponseEntity.accepted().body(Map.of(
+                "exchange", request.exchange(),
+                "routingKey", request.routingKey() == null ? "" : request.routingKey(),
+                "published", true));
     }
 }
