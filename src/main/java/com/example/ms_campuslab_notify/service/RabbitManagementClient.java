@@ -42,6 +42,12 @@ public class RabbitManagementClient {
         return get("/api/bindings");
     }
 
+    /** Nodos del clúster (no pertenecen a un vhost, por eso no se filtran). */
+    public List<Map<String, Object>> nodes() {
+        List<Map<String, Object>> nodes = rest.get().uri("/api/nodes").retrieve().body(LIST_OF_MAPS);
+        return nodes == null ? List.of() : nodes;
+    }
+
     private List<Map<String, Object>> get(String path) {
         List<Map<String, Object>> all = rest.get().uri(path).retrieve().body(LIST_OF_MAPS);
         if (all == null) {

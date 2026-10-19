@@ -19,6 +19,7 @@ import com.example.ms_campuslab_notify.dto.admin.CreateExchangeRequest;
 import com.example.ms_campuslab_notify.dto.admin.CreateQueueRequest;
 import com.example.ms_campuslab_notify.dto.admin.BindingSummary;
 import com.example.ms_campuslab_notify.dto.admin.ExchangeSummary;
+import com.example.ms_campuslab_notify.dto.admin.NodeSummary;
 import com.example.ms_campuslab_notify.dto.admin.PublishMessageRequest;
 import com.example.ms_campuslab_notify.dto.admin.QueueInfoResponse;
 import com.example.ms_campuslab_notify.dto.admin.QueueSummary;
@@ -38,6 +39,13 @@ public class RabbitAdminController {
 
     public RabbitAdminController(RabbitAdminService adminService) {
         this.adminService = adminService;
+    }
+
+    // ================= CLÚSTER =================
+
+    @GetMapping("/nodes")
+    public List<NodeSummary> listNodes() {
+        return adminService.listNodes();
     }
 
     // ================= COLAS =================

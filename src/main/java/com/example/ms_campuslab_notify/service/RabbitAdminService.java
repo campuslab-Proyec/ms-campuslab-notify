@@ -28,6 +28,7 @@ import com.example.ms_campuslab_notify.dto.admin.BindingSummary;
 import com.example.ms_campuslab_notify.dto.admin.CreateExchangeRequest;
 import com.example.ms_campuslab_notify.dto.admin.CreateQueueRequest;
 import com.example.ms_campuslab_notify.dto.admin.ExchangeSummary;
+import com.example.ms_campuslab_notify.dto.admin.NodeSummary;
 import com.example.ms_campuslab_notify.dto.admin.PublishMessageRequest;
 import com.example.ms_campuslab_notify.dto.admin.QueueInfoResponse;
 import com.example.ms_campuslab_notify.dto.admin.QueueSummary;
@@ -64,6 +65,23 @@ public class RabbitAdminService {
         this.managementClient = managementClient;
         this.managedQueues = declaredQueues.stream().map(Queue::getName).collect(Collectors.toUnmodifiableSet());
         this.managedExchanges = declaredExchanges.stream().map(Exchange::getName).collect(Collectors.toUnmodifiableSet());
+    }
+
+    // ================= CLÚSTER =================
+
+    /** Nodos del clúster con su estado (para mostrar que los 2 nodos están unidos y corriendo). */
+    public List<NodeSummary> listNodes() {
+        return management(() -> managementClient.nodes().stream()
+                .map(n -> new NodeSummary(
+                        str(n.get("name")),
+                        bool(n.get("running")),
+                        str(n.get("type")),
+                        num(n.get("uptime")),
+                        num(n.get("mem_used")),
+                        num(n.get("mem_limit")),
+                        n.get("partitions") instanceof List<?> p ? p.size() : 0))
+                .sorted(Comparator.comparing(NodeSummary::name))
+                .toList());
     }
 
     // ================= COLAS =================

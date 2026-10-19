@@ -65,6 +65,7 @@ La lógica está en `service/RabbitAdminService`; `controller/RabbitAdminControl
 
 | Método | Ruta | Descripción |
 |---|---|---|
+| `GET` | `/api/admin/nodes` | Nodos del clúster RabbitMQ con estado, uptime y memoria |
 | `GET` | `/api/admin/queues` | Todas las colas del broker con mensajes y consumidores (vía API de management) |
 | `GET` | `/api/admin/queues/{name}` | Mensajes y consumidores de una cola |
 | `POST` | `/api/admin/queues` | Crea una cola (`name`, `durable`, `autoDelete`, `deadLetterExchange`, `deadLetterRoutingKey`, `messageTtl`, `maxLength`) |
