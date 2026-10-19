@@ -15,6 +15,25 @@ public class MessagingProperties {
     private Exchanges exchanges = new Exchanges();
     private Queues queues = new Queues();
     private Management management = new Management();
+    private Demo demo = new Demo();
+
+    /** Topología de los demos de las guías 2 (routing keys) y 3 (TTL, DLX/DLQ, reintentos). */
+    @Data
+    public static class Demo {
+        private String logsExchange;
+        private String logsAllQueue;
+        private String logsErrorsQueue;
+        private String ordersExchange;
+        private String ordersQueue;
+        private String ordersRoutingKey;
+        private String ordersDlx;
+        private String ordersDlq;
+        private int ordersTtlMs;
+        private int ordersMaxLength;
+        private int ordersDlqRetentionMs;
+        /** Reintentos manuales antes de mandar una orden fallida a la DLQ (backoff 1 s, 2 s, 4 s…). */
+        private int ordersMaxRetries;
+    }
 
     /** API HTTP de management de RabbitMQ, usada para listar colas, exchanges y bindings. */
     @Data

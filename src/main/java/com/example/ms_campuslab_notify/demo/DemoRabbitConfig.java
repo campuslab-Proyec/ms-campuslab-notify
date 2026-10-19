@@ -9,32 +9,37 @@ import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.example.ms_campuslab_notify.config.MessagingProperties;
+
 /**
  * Módulo de laboratorio: aplica las guías de RabbitMQ sin tocar las colas reales de CampusLab.
  *  - Guía 2: DirectExchange + 2 colas + bindings con routing keys (INFO / WARNING / ERROR)
  *  - Guía 3: cola con TTL + DLX/DLQ con retención de 24 h + max-length
+ * Los nombres vienen de application.yaml (campuslab.rabbitmq.demo.*).
  */
 @Configuration
 public class DemoRabbitConfig {
 
-    // ===== Guía 2: exchanges, bindings y routing keys =====
-    public static final String LOGS_EXCHANGE = "demo.logs.exchange";
-    public static final String LOGS_ALL_QUEUE = "demo.logs.all";
-    public static final String LOGS_ERRORS_QUEUE = "demo.logs.errors";
+    private final MessagingProperties.Demo demo;
 
+    public DemoRabbitConfig(MessagingProperties props) {
+        this.demo = props.getDemo();
+    }
+
+    // ===== Guía 2: exchanges, bindings y routing keys =====
     @Bean
     public DirectExchange demoLogsExchange() {
-        return new DirectExchange(LOGS_EXCHANGE, true, false);
+        return new DirectExchange(demo.getLogsExchange(), true, false);
     }
 
     @Bean
     public Queue demoLogsAllQueue() {
-        return QueueBuilder.durable(LOGS_ALL_QUEUE).build();
+        return QueueBuilder.durable(demo.getLogsAllQueue()).build();
     }
 
     @Bean
     public Queue demoLogsErrorsQueue() {
-        return QueueBuilder.durable(LOGS_ERRORS_QUEUE).build();
+        return QueueBuilder.durable(demo.getLogsErrorsQueue()).build();
     }
 
     // all_logs recibe INFO, WARNING y ERROR (3 bindings)
@@ -60,40 +65,34 @@ public class DemoRabbitConfig {
     }
 
     // ===== Guía 3: DLX / DLQ, TTL y retención =====
-    public static final String ORDERS_EXCHANGE = "demo.orders.exchange";
-    public static final String ORDERS_QUEUE = "demo.orders.queue";
-    public static final String ORDERS_ROUTING_KEY = "order.created";
-    public static final String ORDERS_DLX = "demo.orders.dlx";
-    public static final String ORDERS_DLQ = "demo.orders.dlq";
-
     @Bean
     public DirectExchange demoOrdersExchange() {
-        return new DirectExchange(ORDERS_EXCHANGE, true, false);
+        return new DirectExchange(demo.getOrdersExchange(), true, false);
     }
 
     @Bean
     public Queue demoOrdersQueue() {
-        return QueueBuilder.durable(ORDERS_QUEUE)
-                .withArgument("x-message-ttl", 30000)                // expira a los 30 s -> va al DLX
-                .withArgument("x-dead-letter-exchange", ORDERS_DLX)  // rechazados/expirados van aquí
-                .withArgument("x-max-length", 1000)                  // máx. 1000 mensajes
+        return QueueBuilder.durable(demo.getOrdersQueue())
+                .withArgument("x-message-ttl", demo.getOrdersTtlMs())          // expira -> va al DLX
+                .withArgument("x-dead-letter-exchange", demo.getOrdersDlx())  // rechazados/expirados van aquí
+                .withArgument("x-max-length", demo.getOrdersMaxLength())
                 .build();
     }
 
     @Bean
     public Binding demoOrdersBinding() {
-        return BindingBuilder.bind(demoOrdersQueue()).to(demoOrdersExchange()).with(ORDERS_ROUTING_KEY);
+        return BindingBuilder.bind(demoOrdersQueue()).to(demoOrdersExchange()).with(demo.getOrdersRoutingKey());
     }
 
     @Bean
     public FanoutExchange demoOrdersDlx() {
-        return new FanoutExchange(ORDERS_DLX, true, false);
+        return new FanoutExchange(demo.getOrdersDlx(), true, false);
     }
 
     @Bean
     public Queue demoOrdersDlq() {
-        return QueueBuilder.durable(ORDERS_DLQ)
-                .withArgument("x-message-ttl", 86_400_000)           // retención de 24 h para auditoría
+        return QueueBuilder.durable(demo.getOrdersDlq())
+                .withArgument("x-message-ttl", demo.getOrdersDlqRetentionMs()) // retención para auditoría
                 .build();
     }
 

@@ -50,10 +50,13 @@ mvn spring-boot:run
 El microservicio estará disponible por defecto en: http://localhost:8082
 ## 📨 Mensajería (RabbitMQ)
 
-- **Nombres centralizados:** exchanges, colas, DLQ y routing keys están en `application.yaml` (`campuslab.rabbitmq.*`) y se leen con `MessagingProperties`.
+- **Nombres centralizados:** exchanges, colas, DLQ y routing keys (incluidos los demos, `campuslab.rabbitmq.demo.*`) están en `application.yaml` y se leen con `MessagingProperties`.
 - **Topología:** `config/RabbitMQConfig` declara, por cada caso de uso (email, prep, voucher, booking), su `Queue`, su DLQ y sus `Binding` hacia `cmd.direct` / `cmd.dead.dlx`.
 - **Consumidores por dominio** (`consumer/`): `EmailConsumer`, `PreparationConsumer`, `VoucherConsumer`, `BookingEventConsumer`.
-- **ACK manual:** cada consumidor confirma con `basicAck`. Si los datos son inválidos hace `basicNack` sin reencolar (va a la DLQ); ante un error inesperado reencola una vez y, si vuelve a fallar, lo manda a la DLQ.
+- **ACK manual en todos los consumidores** (dominio y demos), con la factory `manualAckContainerFactory`: `basicAck` si se procesa bien; datos inválidos -> `basicNack` sin reencolar (DLQ); error inesperado -> se reencola una vez y luego DLQ.
+- **Reintentos explícitos (guía 3):** una orden que falla se vuelve a publicar con el header `x-retry-count` tras un backoff de 1 s, 2 s y 4 s; agotados los 3 reintentos, `basicNack` -> DLX -> `demo.orders.dlq`. Cada decisión queda en el log.
+- **Sin RabbitMQ en los controllers:** la publicación está en `NotificationPublisher` y `DemoMessagingService`; la administración en `RabbitAdminService`.
+- **Seguridad:** todos los endpoints HTTP validan el JWT de Entra ID (`SecurityConfig`); el BFF reenvía el token del usuario.
 
 ## 🛠️ API de administración de RabbitMQ
 

@@ -9,20 +9,18 @@ spring:
     port: 5672
     username: guest
     password: guest
-    listener:
-      simple:
-        # Guía 3: un mensaje a la vez (fair dispatch)
-        prefetch: 1
-        # Si se agotan los reintentos, el mensaje NO vuelve a la cola: va al DLX -> DLQ
-        default-requeue-rejected: false
-        # Guía 3: reintentos con backoff exponencial (1s, 2s, 4s).
-        # Aplica a los consumidores de demo; los de dominio usan ACK manual (ver RabbitMQConfig)
-        retry:
-          enabled: true
-          initial-interval: 1s
-          multiplier: 2.0
-          max-interval: 10s
-          max-attempts: 3
+    # Todos los consumidores usan la factory "manualAckContainerFactory" de RabbitMQConfig:
+    # ACK manual, prefetch 1 (fair dispatch) y sin requeue automático. Los reintentos son explícitos
+    # en cada consumidor (ver DemoConsumers.processOrder).
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://login.microsoftonline.com/${AZURE_TENANT_ID:aff2eb38-d6cf-4220-8527-53f1cb6aed15}/v2.0
+          # El BFF reenvía el token del usuario, emitido para la API ms-campuslab-bff
+          audiences:
+            - 8d19bb45-1842-43ce-b76c-4513b979df81
+            - api://8d19bb45-1842-43ce-b76c-4513b979df81
 
 # Nombres de exchanges, colas, DLQ y routing keys centralizados en un solo lugar.
 # Se leen con MessagingProperties (RabbitMQConfig, consumidores y productores los usan desde aquí).
@@ -54,3 +52,17 @@ campuslab:
         name: notify.booking.queue
         routing-key: booking.status.changed
         dlq: notify.booking.dlq
+    # Demos de las guías (página "Alertas y guías" del frontend)
+    demo:
+      logs-exchange: demo.logs.exchange
+      logs-all-queue: demo.logs.all
+      logs-errors-queue: demo.logs.errors
+      orders-exchange: demo.orders.exchange
+      orders-queue: demo.orders.queue
+      orders-routing-key: order.created
+      orders-dlx: demo.orders.dlx
+      orders-dlq: demo.orders.dlq
+      orders-ttl-ms: 30000              # sin consumir en 30 s -> DLX
+      orders-max-length: 1000
+      orders-dlq-retention-ms: 86400000 # la DLQ conserva los mensajes 24 h
+      orders-max-retries: 3

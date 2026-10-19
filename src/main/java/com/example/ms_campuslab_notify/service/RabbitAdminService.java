@@ -3,6 +3,7 @@ package com.example.ms_campuslab_notify.service;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
@@ -103,6 +104,14 @@ public class RabbitAdminService {
                     })
                     .toList();
         }
+    }
+
+    /** Como getQueue, pero sin error si la cola no existe (para paneles de monitoreo). */
+    public Optional<QueueInfoResponse> findQueue(String name) {
+        QueueInformation info = queueInfo(name);
+        return info == null
+                ? Optional.empty()
+                : Optional.of(new QueueInfoResponse(name, info.getMessageCount(), info.getConsumerCount(), managedQueues.contains(name)));
     }
 
     public QueueInfoResponse getQueue(String name) {
