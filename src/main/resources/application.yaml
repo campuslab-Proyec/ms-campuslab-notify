@@ -34,6 +34,8 @@ campuslab:
     exchanges:
       command: cmd.direct
       dead-letter: cmd.dead.dlx
+      # Topic: bookings publica booking.solicitada, booking.aprobada, booking.cancelada...
+      booking-events: booking.events
     queues:
       email:
         name: q.cmd.email
@@ -47,10 +49,11 @@ campuslab:
         name: q.cmd.voucher
         routing-key: voucher.gen
         dlq: q.cmd.voucher.dlq
-      # La declara también ms-campuslab-bookings con los mismos argumentos
+      # La declara también ms-campuslab-bookings con los mismos argumentos.
+      # Binding con comodín al topic exchange: "*" = exactamente una palabra (cualquier estado)
       booking:
         name: notify.booking.queue
-        routing-key: booking.status.changed
+        routing-key: "booking.*"
         dlq: notify.booking.dlq
     # Demos de las guías (página "Alertas y guías" del frontend)
     demo:

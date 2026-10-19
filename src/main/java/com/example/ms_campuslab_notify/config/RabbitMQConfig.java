@@ -56,6 +56,12 @@ public class RabbitMQConfig {
         return new DirectExchange(props.getExchanges().getCommand());
     }
 
+    /** Topic exchange de eventos de reservas: permite bindings con comodines (booking.*, booking.#). */
+    @Bean
+    public TopicExchange bookingEventsExchange() {
+        return new TopicExchange(props.getExchanges().getBookingEvents());
+    }
+
     @Bean
     public DirectExchange deadLetterExchange() {
         return new DirectExchange(props.getExchanges().getDeadLetter());
@@ -143,7 +149,8 @@ public class RabbitMQConfig {
 
     @Bean
     public Binding bookingBinding() {
-        return BindingBuilder.bind(bookingQueue()).to(directExchange())
+        // booking.* -> todos los cambios de estado (booking.aprobada, booking.cancelada...)
+        return BindingBuilder.bind(bookingQueue()).to(bookingEventsExchange())
                 .with(props.getQueues().getBooking().getRoutingKey());
     }
 

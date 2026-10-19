@@ -52,6 +52,7 @@ El microservicio estará disponible por defecto en: http://localhost:8082
 
 - **Nombres centralizados:** exchanges, colas, DLQ y routing keys (incluidos los demos, `campuslab.rabbitmq.demo.*`) están en `application.yaml` y se leen con `MessagingProperties`.
 - **Topología:** `config/RabbitMQConfig` declara, por cada caso de uso (email, prep, voucher, booking), su `Queue`, su DLQ y sus `Binding` hacia `cmd.direct` / `cmd.dead.dlx`.
+- **Topic exchange `booking.events`:** bookings publica con routing key `booking.<estado>` (`booking.solicitada`, `booking.aprobada`...) y `notify.booking.queue` se enlaza con el comodín `booking.*` (`*` = una palabra: cualquier estado).
 - **Consumidores por dominio** (`consumer/`): `EmailConsumer`, `PreparationConsumer`, `VoucherConsumer`, `BookingEventConsumer`.
 - **ACK manual en todos los consumidores** (dominio y demos), con la factory `manualAckContainerFactory`: `basicAck` si se procesa bien; datos inválidos -> `basicNack` sin reencolar (DLQ); error inesperado -> se reencola una vez y luego DLQ.
 - **Reintentos explícitos (guía 3):** una orden que falla se vuelve a publicar con el header `x-retry-count` tras un backoff de 1 s, 2 s y 4 s; agotados los 3 reintentos, `basicNack` -> DLX -> `demo.orders.dlq`. Cada decisión queda en el log.

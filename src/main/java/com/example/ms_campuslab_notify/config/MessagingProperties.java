@@ -47,6 +47,8 @@ public class MessagingProperties {
     public static class Exchanges {
         private String command;
         private String deadLetter;
+        /** Topic exchange de eventos de reservas (routing key booking.<estado>). */
+        private String bookingEvents;
     }
 
     @Data
